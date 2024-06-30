@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.43.5",
+    "axios": "^1.7.2",
+    "commandkit": "^0.1.10",
+    "discord.js": "^14.15.3"
+  }
+}
