@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
 import { SlashCommandProps, CommandOptions, ButtonKit } from 'commandkit';
-import { supabase } from '../script';
+import { supabase } from '../../script';
 
 export const data = new SlashCommandBuilder()
   .setName('ase-setup-cluster')
