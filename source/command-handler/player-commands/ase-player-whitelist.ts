@@ -6,7 +6,7 @@ import axios, { AxiosResponse } from 'axios';
 import { supabase } from '../../script';
 
 export const data = new SlashCommandBuilder()
-  .setName('ase-player-unban')
+  .setName('ase-player-whitelist')
   .setDescription('Performs an in-game player action.')
   .addStringOption(option => option.setName('username').setDescription('Selected action will be performed on given tag.').setRequired(true))
 
@@ -31,14 +31,12 @@ export async function run({ interaction }: SlashCommandProps) {
       overall++;
 
       try {
-        const url: string = `https://api.nitrado.net/services/${service.id}/gameservers/games/banlist`;
-        const response: AxiosResponse<PlayerActionProps> = await axios.delete(url, {
-          headers: { 'Authorization': token, 'Content-Type': 'application/json' },
-          data: { identifier: input.username }
-        });
+        const url: string = `https://api.nitrado.net/services/${service.id}/gameservers/games/whitelist`;
+        const response: AxiosResponse<PlayerActionProps> = await axios.post(url, { identifier: input.username },
+          { headers: { 'Authorization': token, 'Content-Type': 'application/json' } });
 
         response.status === 200 && success++;
-      } catch (error: any) { if (error.response.data.message === "Can't remove the user from the banlist.") success++ };
+      } catch (error: any) { if (error.response.data.message === "Can't add the user to the whitelist.") success++ };
     });
 
     await Promise.all(tasks).then(async () => {
