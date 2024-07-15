@@ -1,7 +1,17 @@
-import { Events, ActionRowBuilder, TextInputBuilder, TextInputStyle, ModalActionRowComponentBuilder, Client, Interaction, ModalBuilder, Embed, EmbedBuilder, ButtonStyle } from 'discord.js';
+import { Events, ActionRowBuilder, TextInputBuilder, TextInputStyle, ModalActionRowComponentBuilder, Client, Interaction, ModalBuilder, Embed, EmbedBuilder, ButtonStyle, ChannelType } from 'discord.js';
+import { statusMessageEmbed } from '../../../command-handler/utilities/embeds';
 import axios, { AxiosResponse } from 'axios';
-import { ButtonKit } from 'commandkit';
 import { supabase } from '../../../script';
+import { ButtonKit } from 'commandkit';
+
+const upsertTokenData = async (identifier: string, requiredToken: string, optionalToken?: string) => {
+  const { data } = await supabase
+    .from('ase-configuration')
+    .upsert([{ guild: identifier, nitrado: { requiredToken: requiredToken, optionalToken: optionalToken } }])
+    .select()
+
+  console.log(data);
+};
 
 export default function (client: Client<true>) {
   client.on(Events.InteractionCreate, async (interaction: Interaction) => {
@@ -38,36 +48,34 @@ export default function (client: Client<true>) {
     if (interaction.isModalSubmit()) {
       if (interaction.customId === 'ase-modal-setup') {
         await interaction.deferReply({ ephemeral: false })
-        const required: string = interaction.fields.getTextInputValue('ase-nitrado-token-required');
-        const optional: string = interaction.fields.getTextInputValue('ase-nitrado-token-optional');
+        const requiredToken: string = interaction.fields.getTextInputValue('ase-nitrado-token-required');
+        const optionalToken: string = interaction.fields.getTextInputValue('ase-nitrado-token-optional');
+        const url: string = 'https://oauth.nitrado.net/token';
 
-        if (required) {
-          try {
-            const url: string = 'https://oauth.nitrado.net/token'
-            const response = await axios.get(url, { headers: { 'Authorization': required } })
-            console.log(response.data)
-          } catch (error) {
-            return await interaction.followUp({ content: 'Token Verification: Error' })
+        try {
+          const responses = await Promise.all([
+            requiredToken ? axios.get(url, { headers: { 'Authorization': requiredToken } }) : Promise.resolve(null),
+            optionalToken ? axios.get(url, { headers: { 'Authorization': optionalToken } }) : Promise.resolve(null)
+          ]);
+
+          const [requiredResponse, optionalResponse] = responses;
+
+          if (requiredResponse && optionalResponse) {
+            await upsertTokenData(interaction.guild!.id, requiredToken, optionalToken);
+
+          } else if (requiredResponse) {
+            await upsertTokenData(interaction.guild!.id, requiredToken);
           }
-        }
 
-        if (optional) {
-          try {
-            const url: string = 'https://oauth.nitrado.net/token'
-            const response = await axios.get(url, { headers: { 'Authorization': optional } })
-            console.log(response.data)
-          } catch (error) {
-            return await interaction.followUp({ content: 'Token Verification: Error' })
-          }
-        }
+        } catch (error) { return await interaction.followUp({ content: 'Token Verification: Error' }) };
 
-        const installation = new ButtonKit()
+        const installation: ButtonKit = new ButtonKit()
           .setCustomId('ase-setup-token')
           .setStyle(ButtonStyle.Success)
           .setLabel('Setup Token')
           .setDisabled(true);
 
-        const support = new ButtonKit()
+        const support: ButtonKit = new ButtonKit()
           .setURL('https://discord.gg/VQanyb23Rn')
           .setStyle(ButtonStyle.Link)
           .setLabel('Support Server');
@@ -82,8 +90,31 @@ export default function (client: Client<true>) {
           .setColor(0x2ecc71);
 
         await interaction.message?.edit({ embeds: [embed], components: [row] })
-          .then(async () => await interaction.followUp({ content: "Proceeding with installation...", ephemeral: true }));
-      }
-    }
+          .then(async () => {
+            await interaction.followUp({ content: "Proceeding with installation...", ephemeral: true });
+
+            const statusCategory = await interaction.guild!.channels.create({
+              name: `AS:E Status Overview`,
+              type: ChannelType.GuildCategory,
+            });
+
+            const statusChannel = await interaction.guild!.channels.create({
+              name: '🔗│𝗦erver-𝗦tatus',
+              type: ChannelType.GuildText,
+              parent: statusCategory
+            });
+
+            const statusEmbed = statusMessageEmbed();
+            const statusMessage = await statusChannel.send({ embeds: [statusEmbed] });
+
+            const { data } = await supabase
+              .from('ase-configuration')
+              .upsert([{ guild: interaction.guild!.id, status: { channel: statusChannel.id, message: statusMessage.id } }])
+              .select()
+
+            console.log(data);
+          });
+      };
+    };
   });
 }
